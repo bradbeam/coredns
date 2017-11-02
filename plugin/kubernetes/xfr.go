@@ -11,7 +11,7 @@ import (
 )
 
 // Serial implements the Transferer interface.
-func (k *Kubernetes) Serial(state request.Request) uint32 { return k.APIConn.Modified() }
+func (k *Kubernetes) Serial(state request.Request) uint32 { return uint32(k.APIConn.Modified()) }
 
 // MinTTL implements the Transferer interface.
 func (k *Kubernetes) MinTTL(state request.Request) uint32 { return 30 }
