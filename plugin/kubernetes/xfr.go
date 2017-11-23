@@ -31,10 +31,11 @@ func (k *Kubernetes) transfer(c chan msg.Service, zone string) {
 
 	zonePath := msg.Path(zone, "coredns")
 	serviceList := k.APIConn.ServiceList()
-	endpointsList := k.APIConn.EndpointsList()
 	for _, svc := range serviceList {
 		// Endpoint query or headless service
 		if svc.Spec.ClusterIP == api.ClusterIPNone {
+			endpointsList := k.APIConn.EpIndex(svc.Name + "." + svc.Namespace)
+
 			for _, ep := range endpointsList {
 				if ep.ObjectMeta.Name != svc.Name || ep.ObjectMeta.Namespace != svc.Namespace {
 					continue
@@ -52,7 +53,6 @@ func (k *Kubernetes) transfer(c chan msg.Service, zone string) {
 					}
 				}
 			}
-
 			continue
 		}
 
@@ -63,9 +63,8 @@ func (k *Kubernetes) transfer(c chan msg.Service, zone string) {
 				s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
 
 				c <- s
-
-				continue
 			}
+			continue
 		}
 
 		// ClusterIP service
