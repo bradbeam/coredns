@@ -45,7 +45,7 @@ func (k *Kubernetes) transfer(c chan msg.Service, zone string) {
 						for _, p := range eps.Ports {
 
 							s := msg.Service{Host: addr.IP, Port: int(p.Port), TTL: k.ttl}
-							s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name, endpointHostname(addr)}, "/")
+							s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name, endpointHostname(addr, k.endpointNameMode)}, "/")
 
 							c <- s
 						}
