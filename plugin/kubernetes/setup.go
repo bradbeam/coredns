@@ -50,6 +50,15 @@ func setup(c *caddy.Controller) error {
 		return nil
 	})
 
+	c.OnStartup(func() error {
+		if len(kubernetes.TransferTo) > 0 {
+			kubernetes.Notify()
+			//msg := k8s.Transfer(request.Request{Zone: zone, Req: new(dns.Msg)})
+		}
+
+		return nil
+	})
+
 	c.OnShutdown(func() error {
 		if kubernetes.APIProxy != nil {
 			kubernetes.APIProxy.Stop()
@@ -88,6 +97,7 @@ func kubernetesParse(c *caddy.Controller) (*Kubernetes, dnsControlOpts, error) {
 				k8s.Zones[i] = plugin.Host(c.ServerBlockKeys[i]).Normalize()
 			}
 		}
+		// k8s.Zones should == origins at this point
 
 		k8s.primaryZoneIndex = -1
 		for i, z := range k8s.Zones {
@@ -201,12 +211,44 @@ func kubernetesParse(c *caddy.Controller) (*Kubernetes, dnsControlOpts, error) {
 					return nil, opts, c.Errf("ttl must be in range [5, 3600]: %d", t)
 				}
 				k8s.ttl = uint32(t)
+			case "transfer":
+				dests, err := TransferParse(c)
+				if err != nil {
+					return nil, opts, err
+				}
+				k8s.TransferTo = dests
 			default:
 				return nil, opts, c.Errf("unknown property '%s'", c.Val())
 			}
 		}
 	}
 	return k8s, opts, nil
+}
+
+// TransferParse parses transfer statements: 'transfer to [address...]'.
+func TransferParse(c *caddy.Controller) ([]string, error) {
+	if !c.NextArg() {
+		return nil, c.ArgErr()
+	}
+	var tos []string
+	value := c.Val()
+	switch value {
+	case "to":
+		tos = c.RemainingArgs()
+		for i := range tos {
+			if tos[i] != "*" {
+				normalized, err := dnsutil.ParseHostPort(tos[i], "53")
+				if err != nil {
+					return nil, err
+				}
+				tos[i] = normalized
+			}
+		}
+
+	default:
+		return nil, fmt.Errorf("only transfer to is supported")
+	}
+	return tos, nil
 }
 
 func searchFromResolvConf() []string {
