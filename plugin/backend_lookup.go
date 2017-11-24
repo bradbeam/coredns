@@ -379,6 +379,43 @@ func SOA(b ServiceBackend, zone string, state request.Request, opt Options) ([]d
 	return []dns.RR{soa}, nil
 }
 
+/*
+func XFR(b ServiceBackend, zone string, state request.Request, opt Options) ([]dns.RR, error) {
+
+	records := []dns.RR{}
+	var rr []dns.RR
+	var err error
+
+	rr, err = SOA(b, zone, state, opt)
+	if err != nil {
+		return nil, err
+	}
+	records = append(records, rr...)
+
+	for msg := range b.Transfer(state) {
+		rr, err = A(b, zone, state, records, opt)
+		/*
+			dnsType, _ := msg.HostType()
+			switch dnsType {
+			case dns.TypeA:
+				rr, err = A(b, zone, state, records, opt)
+			case dns.TypeAAAA:
+				rr, err = AAAAA(b, zone, state, opt)
+			case dns.TypeCNAME:
+				rr, err = CNAME(b, zone, state, opt)
+			}
+
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, rr...)
+	}
+
+	records = append(records, records[0]) // add closing SOA to the end
+	return records, err
+}
+*/
+
 // BackendError writes an error response to the client.
 func BackendError(b ServiceBackend, zone string, rcode int, state request.Request, err error, opt Options) (int, error) {
 	m := new(dns.Msg)

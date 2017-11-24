@@ -30,29 +30,94 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		err     error
 	)
 
-	switch state.Type() {
-	case "A":
+	switch state.QType() {
+	case dns.TypeA:
 		records, err = plugin.A(&k, zone, state, nil, plugin.Options{})
-	case "AAAA":
+	case dns.TypeAAAA:
 		records, err = plugin.AAAA(&k, zone, state, nil, plugin.Options{})
-	case "TXT":
+	case dns.TypeTXT:
 		records, err = plugin.TXT(&k, zone, state, plugin.Options{})
-	case "CNAME":
+	case dns.TypeCNAME:
 		records, err = plugin.CNAME(&k, zone, state, plugin.Options{})
-	case "PTR":
+	case dns.TypePTR:
 		records, err = plugin.PTR(&k, zone, state, plugin.Options{})
-	case "MX":
+	case dns.TypeMX:
 		records, extra, err = plugin.MX(&k, zone, state, plugin.Options{})
-	case "SRV":
+	case dns.TypeSRV:
 		records, extra, err = plugin.SRV(&k, zone, state, plugin.Options{})
-	case "SOA":
+	case dns.TypeSOA:
 		records, err = plugin.SOA(&k, zone, state, plugin.Options{})
-	case "NS":
+	case dns.TypeNS:
 		if state.Name() == zone {
 			records, extra, err = plugin.NS(&k, zone, state, plugin.Options{})
 			break
 		}
 		fallthrough
+	case dns.TypeAXFR:
+		var rrs []dns.RR
+		var extrarrs []dns.RR
+		rrs, err = plugin.SOA(&k, zone, state, plugin.Options{})
+		if err != nil {
+			break
+		}
+		records = append(records, rrs...)
+
+		rrs, err = plugin.A(&k, zone, state, nil, plugin.Options{})
+		if err != nil {
+			break
+		}
+		records = append(records, rrs...)
+
+		rrs, err = plugin.AAAA(&k, zone, state, nil, plugin.Options{})
+		if err != nil {
+			break
+		}
+		records = append(records, rrs...)
+
+		rrs, err = plugin.TXT(&k, zone, state, plugin.Options{})
+		if err != nil {
+			break
+		}
+		records = append(records, rrs...)
+
+		rrs, err = plugin.CNAME(&k, zone, state, plugin.Options{})
+		if err != nil {
+			break
+		}
+		records = append(records, rrs...)
+
+		rrs, err = plugin.PTR(&k, zone, state, plugin.Options{})
+		if err != nil {
+			break
+		}
+		records = append(records, rrs...)
+
+		rrs, extra, err = plugin.MX(&k, zone, state, plugin.Options{})
+		if err != nil {
+			break
+		}
+		records = append(records, rrs...)
+		extra = append(extra, extrarrs...)
+
+		rrs, extra, err = plugin.SRV(&k, zone, state, plugin.Options{})
+		if err != nil {
+			break
+		}
+		records = append(records, rrs...)
+		extra = append(extra, extrarrs...)
+
+		rrs, extrarrs, err = plugin.NS(&k, zone, state, plugin.Options{})
+		if err != nil {
+			break
+		}
+		records = append(records, rrs...)
+		extra = append(extra, extrarrs...)
+
+		rrs, err = plugin.SOA(&k, zone, state, plugin.Options{})
+		if err != nil {
+			break
+		}
+		records = append(records, rrs...)
 	default:
 		// Do a fake A lookup, so we can distinguish between NODATA and NXDOMAIN
 		_, err = plugin.A(&k, zone, state, nil, plugin.Options{})
