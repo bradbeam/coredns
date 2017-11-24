@@ -106,18 +106,17 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		records = append(records, rrs...)
 		extra = append(extra, extrarrs...)
 
-		rrs, extrarrs, err = plugin.NS(&k, zone, state, plugin.Options{})
-		if err != nil {
-			break
-		}
-		records = append(records, rrs...)
-		extra = append(extra, extrarrs...)
+		// TODO not sure why this is throwing `invalid query name`
+		/*
+			rrs, extrarrs, err = plugin.NS(&k, zone, state, plugin.Options{})
+			if err != nil {
+				fmt.Println("ns", err)
+				break
+			}
+			records = append(records, rrs...)
+			extra = append(extra, extrarrs...)
+		*/
 
-		rrs, err = plugin.SOA(&k, zone, state, plugin.Options{})
-		if err != nil {
-			break
-		}
-		records = append(records, rrs...)
 	default:
 		// Do a fake A lookup, so we can distinguish between NODATA and NXDOMAIN
 		_, err = plugin.A(&k, zone, state, nil, plugin.Options{})
@@ -141,6 +140,12 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	m.Extra = append(m.Extra, extra...)
 
 	m = dnsutil.Dedup(m)
+	if state.QType() == dns.TypeAXFR {
+		// Add the SOA entry to the end of the records
+		// Gets stripped out in dedup earlier
+		m.Answer = append(m.Answer, m.Extra...)
+		m.Answer = append(m.Answer, records[0])
+	}
 	state.SizeAndDo(m)
 	m, _ = state.Scrub(m)
 	w.WriteMsg(m)

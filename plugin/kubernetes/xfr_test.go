@@ -26,18 +26,19 @@ func TestKubernetesTransfer(t *testing.T) {
 func TestKubernetesXFR(t *testing.T) {
 	k := New([]string{"cluster.local."})
 	k.APIConn = &APIConnServeTest{}
+
 	ctx := context.TODO()
 	w := dnstest.NewRecorder(&test.ResponseWriter{})
 	msg := &dns.Msg{}
 	msg.SetAxfr(k.Zones[0])
 
-	i, err := k.ServeDNS(ctx, w, msg)
+	_, err := k.ServeDNS(ctx, w, msg)
 	if err != nil {
 		t.Error(err)
 	}
 
-	resp := w.Msg
-
-	t.Logf("%+v", i)
-	t.Logf("%+v", resp)
+	if w.Msg == nil {
+		t.Logf("%+v\n", w)
+		t.Error("Did not get back a zone response")
+	}
 }

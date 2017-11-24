@@ -53,7 +53,6 @@ func setup(c *caddy.Controller) error {
 	c.OnStartup(func() error {
 		if len(kubernetes.TransferTo) > 0 {
 			kubernetes.Notify()
-			//msg := k8s.Transfer(request.Request{Zone: zone, Req: new(dns.Msg)})
 		}
 
 		return nil
