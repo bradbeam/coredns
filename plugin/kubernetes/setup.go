@@ -50,6 +50,15 @@ func setup(c *caddy.Controller) error {
 		return nil
 	})
 
+	/*
+		for n, _ := range kubernetes.Zones {
+			// Something like this?
+			// c.OnStartup(func() error {
+			// 	go kubernetes.Transfer(n)
+			// }
+		}
+	*/
+
 	c.OnShutdown(func() error {
 		if kubernetes.APIProxy != nil {
 			kubernetes.APIProxy.Stop()
@@ -101,6 +110,9 @@ func kubernetesParse(c *caddy.Controller) (*Kubernetes, dnsControlOpts, error) {
 		if k8s.primaryZoneIndex == -1 {
 			return nil, opts, errors.New("non-reverse zone name must be used")
 		}
+
+		//tos := []string{}
+		var e error
 
 		for c.NextBlock() {
 			switch c.Val() {
@@ -201,9 +213,23 @@ func kubernetesParse(c *caddy.Controller) (*Kubernetes, dnsControlOpts, error) {
 					return nil, opts, c.Errf("ttl must be in range [5, 3600]: %d", t)
 				}
 				k8s.ttl = uint32(t)
+			case "transfer":
+				_, e = TransferParse(c)
+				//tos, e = TransferParse(c)
+				if e != nil {
+					return nil, opts, e
+				}
 			default:
 				return nil, opts, c.Errf("unknown property '%s'", c.Val())
 			}
+
+			/*
+				for _, origin := range k8s.Zones {
+					if tos != nil {
+						k8s.Zones[origin].TransferTo = append(k8s.Zones[origin].TransferTo, tos...)
+					}
+				}
+			*/
 		}
 	}
 	return k8s, opts, nil
@@ -216,6 +242,30 @@ func searchFromResolvConf() []string {
 	}
 	plugin.Zones(rc.Search).Normalize()
 	return rc.Search
+}
+
+// TransferParse parses transfer statements: 'transfer to [address...]'.
+func TransferParse(c *caddy.Controller) (tos []string, err error) {
+	if !c.NextArg() {
+		return nil, c.ArgErr()
+	}
+	value := c.Val()
+	switch value {
+	case "to":
+		tos = c.RemainingArgs()
+		for i := range tos {
+			if tos[i] != "*" {
+				normalized, err := dnsutil.ParseHostPort(tos[i], "53")
+				if err != nil {
+					return nil, err
+				}
+				tos[i] = normalized
+			}
+		}
+	default:
+		return nil, fmt.Errorf("unrecognized transfer configuration")
+	}
+	return
 }
 
 const defaultResyncPeriod = 5 * time.Minute
