@@ -379,6 +379,49 @@ func SOA(b ServiceBackend, zone string, state request.Request, opt Options) ([]d
 	return []dns.RR{soa}, nil
 }
 
+func AXFR(b ServiceBackend, zone string, state request.Request, opt Options) ([]dns.RR, []dns.RR, error) {
+	var axfr, extra, extras, rrs, soa []dns.RR
+	var err error
+
+	rrFuncs := []interface{}{A, AAAA}
+	// SOA also follows this pattern, but we need to handle it
+	// separately
+	rrFuncts := []interface{}{TXT, CNAME, PTR}
+	// TODO: find out why NS returns invalid query name
+	rrFunky := []interface{}{MX, SRV}
+
+	soa, err = SOA(b, zone, state, opt)
+	if err != nil {
+		return nil, nil, err
+	}
+	axfr = append(axfr, soa...)
+
+	for _, f := range rrFuncs {
+		rrs, err = f.(func(ServiceBackend, string, request.Request, []dns.RR, Options) ([]dns.RR, error))(b, zone, state, nil, opt)
+		if err != nil {
+			return nil, nil, err
+		}
+		axfr = append(axfr, rrs...)
+	}
+	for _, f := range rrFuncts {
+		rrs, err = f.(func(ServiceBackend, string, request.Request, Options) ([]dns.RR, error))(b, zone, state, opt)
+		if err != nil {
+			return nil, nil, err
+		}
+		axfr = append(axfr, rrs...)
+	}
+	for _, f := range rrFunky {
+		rrs, extras, err = f.(func(ServiceBackend, string, request.Request, Options) ([]dns.RR, []dns.RR, error))(b, zone, state, opt)
+		if err != nil {
+			return nil, nil, err
+		}
+		axfr = append(axfr, rrs...)
+		extra = append(extra, extras...)
+	}
+
+	return axfr, extra, nil
+}
+
 // BackendError writes an error response to the client.
 func BackendError(b ServiceBackend, zone string, rcode int, state request.Request, err error, opt Options) (int, error) {
 	m := new(dns.Msg)

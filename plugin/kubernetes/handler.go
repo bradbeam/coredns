@@ -53,6 +53,24 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 			break
 		}
 		fallthrough
+	case dns.TypeAXFR:
+		records, extra, err = plugin.AXFR(&k, zone, state, plugin.Options{})
+	/*
+		// no joy
+		msgs := k.Transfer(state)
+		for msg := range msgs {
+			fmt.Printf("%+v\n", msg)
+			rrType, _ := msg.HostType()
+			rrfunc, ok := dns.TypeToRR[rrType]
+			if !ok {
+				err = fmt.Errorf("%s\n", "Invalid rr type ")
+				break
+			}
+			records = append(records, rrfunc())
+			fmt.Printf("%+v\n", records)
+		}
+	*/
+
 	default:
 		// Do a fake A lookup, so we can distinguish between NODATA and NXDOMAIN
 		_, err = plugin.A(&k, zone, state, nil, plugin.Options{})
@@ -76,6 +94,10 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	m.Extra = append(m.Extra, extra...)
 
 	m = dnsutil.Dedup(m)
+	// Need to add in SOA record at end after dedup
+	if state.QType() == dns.TypeAXFR {
+		m.Answer = append(m.Answer, m.Answer[0])
+	}
 	state.SizeAndDo(m)
 	m, _ = state.Scrub(m)
 	w.WriteMsg(m)
