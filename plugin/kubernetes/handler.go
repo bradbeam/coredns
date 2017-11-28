@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/plugin/etcd/msg"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/request"
 
@@ -54,22 +55,34 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		}
 		fallthrough
 	case dns.TypeAXFR:
-		records, extra, err = plugin.AXFR(&k, zone, state, plugin.Options{})
-	/*
-		// no joy
-		msgs := k.Transfer(state)
-		for msg := range msgs {
-			fmt.Printf("%+v\n", msg)
-			rrType, _ := msg.HostType()
-			rrfunc, ok := dns.TypeToRR[rrType]
-			if !ok {
-				err = fmt.Errorf("%s\n", "Invalid rr type ")
+		var xfrrecs []dns.RR
+		xfrrecs, err = plugin.SOA(&k, zone, state, plugin.Options{})
+		records = append(records, xfrrecs...)
+
+		services := k.Transfer(state)
+
+		for service := range services {
+			rrType, _ := service.HostType()
+			dnsMsg := &dns.Msg{}
+			dnsMsg.SetQuestion(msg.Domain(service.Key), rrType)
+			queryState := request.Request{Req: dnsMsg, Zone: zone}
+			switch rrType {
+			case dns.TypeA:
+				xfrrecs, err = plugin.A(&k, zone, queryState, nil, plugin.Options{})
+			case dns.TypeAAAA:
+				xfrrecs, err = plugin.AAAA(&k, zone, queryState, nil, plugin.Options{})
+			case dns.TypeCNAME:
+				xfrrecs, err = plugin.CNAME(&k, zone, queryState, plugin.Options{})
+			default:
+				err = errInvalidRequest
+			}
+
+			if err != nil {
 				break
 			}
-			records = append(records, rrfunc())
-			fmt.Printf("%+v\n", records)
+
+			records = append(records, xfrrecs...)
 		}
-	*/
 
 	default:
 		// Do a fake A lookup, so we can distinguish between NODATA and NXDOMAIN
@@ -94,10 +107,12 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	m.Extra = append(m.Extra, extra...)
 
 	m = dnsutil.Dedup(m)
+
 	// Need to add in SOA record at end after dedup
 	if state.QType() == dns.TypeAXFR {
 		m.Answer = append(m.Answer, m.Answer[0])
 	}
+
 	state.SizeAndDo(m)
 	m, _ = state.Scrub(m)
 	w.WriteMsg(m)
