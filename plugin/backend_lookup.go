@@ -379,47 +379,38 @@ func SOA(b ServiceBackend, zone string, state request.Request, opt Options) ([]d
 	return []dns.RR{soa}, nil
 }
 
-func AXFR(b ServiceBackend, zone string, state request.Request, opt Options) ([]dns.RR, []dns.RR, error) {
-	var axfr, extra, extras, rrs, soa []dns.RR
+// AXFR returns all A, AAAA, and CNAME records from a Backend via the Transfer interface or an error.
+func AXFR(b ServiceBackend, zone string, state request.Request, opt Options) ([]dns.RR, error) {
+
+	var records, xfrrecs []dns.RR
 	var err error
+	xfrrecs, err = SOA(b, zone, state, opt)
+	records = append(records, xfrrecs...)
 
-	rrFuncs := []interface{}{A, AAAA}
-	// SOA also follows this pattern, but we need to handle it
-	// separately
-	rrFuncts := []interface{}{TXT, CNAME, PTR}
-	// TODO: find out why NS returns invalid query name
-	rrFunky := []interface{}{MX, SRV}
+	services := b.Transfer(state)
 
-	soa, err = SOA(b, zone, state, opt)
-	if err != nil {
-		return nil, nil, err
-	}
-	axfr = append(axfr, soa...)
-
-	for _, f := range rrFuncs {
-		rrs, err = f.(func(ServiceBackend, string, request.Request, []dns.RR, Options) ([]dns.RR, error))(b, zone, state, nil, opt)
-		if err != nil {
-			return nil, nil, err
+	for service := range services {
+		rrType, _ := service.HostType()
+		dnsMsg := &dns.Msg{}
+		dnsMsg.SetQuestion(msg.Domain(service.Key), rrType)
+		queryState := request.Request{Req: dnsMsg, Zone: zone}
+		switch rrType {
+		case dns.TypeA:
+			xfrrecs, err = A(b, zone, queryState, nil, opt)
+		case dns.TypeAAAA:
+			xfrrecs, err = AAAA(b, zone, queryState, nil, opt)
+		case dns.TypeCNAME:
+			xfrrecs, err = CNAME(b, zone, queryState, opt)
 		}
-		axfr = append(axfr, rrs...)
-	}
-	for _, f := range rrFuncts {
-		rrs, err = f.(func(ServiceBackend, string, request.Request, Options) ([]dns.RR, error))(b, zone, state, opt)
+
 		if err != nil {
-			return nil, nil, err
+			break
 		}
-		axfr = append(axfr, rrs...)
-	}
-	for _, f := range rrFunky {
-		rrs, extras, err = f.(func(ServiceBackend, string, request.Request, Options) ([]dns.RR, []dns.RR, error))(b, zone, state, opt)
-		if err != nil {
-			return nil, nil, err
-		}
-		axfr = append(axfr, rrs...)
-		extra = append(extra, extras...)
+
+		records = append(records, xfrrecs...)
 	}
 
-	return axfr, extra, nil
+	return records, nil
 }
 
 // BackendError writes an error response to the client.

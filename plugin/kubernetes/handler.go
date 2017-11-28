@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/etcd/msg"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/request"
 
@@ -55,35 +54,7 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		}
 		fallthrough
 	case dns.TypeAXFR:
-		var xfrrecs []dns.RR
-		xfrrecs, err = plugin.SOA(&k, zone, state, plugin.Options{})
-		records = append(records, xfrrecs...)
-
-		services := k.Transfer(state)
-
-		for service := range services {
-			rrType, _ := service.HostType()
-			dnsMsg := &dns.Msg{}
-			dnsMsg.SetQuestion(msg.Domain(service.Key), rrType)
-			queryState := request.Request{Req: dnsMsg, Zone: zone}
-			switch rrType {
-			case dns.TypeA:
-				xfrrecs, err = plugin.A(&k, zone, queryState, nil, plugin.Options{})
-			case dns.TypeAAAA:
-				xfrrecs, err = plugin.AAAA(&k, zone, queryState, nil, plugin.Options{})
-			case dns.TypeCNAME:
-				xfrrecs, err = plugin.CNAME(&k, zone, queryState, plugin.Options{})
-			default:
-				err = errInvalidRequest
-			}
-
-			if err != nil {
-				break
-			}
-
-			records = append(records, xfrrecs...)
-		}
-
+		records, err = plugin.AXFR(&k, zone, state, plugin.Options{})
 	default:
 		// Do a fake A lookup, so we can distinguish between NODATA and NXDOMAIN
 		_, err = plugin.A(&k, zone, state, nil, plugin.Options{})
