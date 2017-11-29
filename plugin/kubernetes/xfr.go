@@ -44,6 +44,9 @@ func (k *Kubernetes) transfer(c chan msg.Service, zone string) {
 
 					c <- s
 
+					s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name, strings.ToLower("_" + string(p.Protocol)), strings.ToLower("_" + string(p.Name))}, "/")
+
+					c <- s
 				}
 
 				//  Skip endpoint discovery if clusterIP is defined
@@ -66,6 +69,9 @@ func (k *Kubernetes) transfer(c chan msg.Service, zone string) {
 
 							c <- s
 
+							s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name, strings.ToLower("_" + string(p.Protocol)), strings.ToLower("_" + string(p.Name))}, "/")
+
+							c <- s
 						}
 					}
 				}

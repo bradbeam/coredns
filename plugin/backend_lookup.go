@@ -401,6 +401,8 @@ func AXFR(b ServiceBackend, zone string, state request.Request, opt Options) ([]
 			xfrrecs, err = AAAA(b, zone, queryState, nil, opt)
 		case dns.TypeCNAME:
 			xfrrecs, err = CNAME(b, zone, queryState, opt)
+		case dns.TypeSRV:
+			xfrrecs, _, err = SRV(b, zone, queryState, opt)
 		}
 
 		if err != nil {

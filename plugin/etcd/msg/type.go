@@ -2,6 +2,7 @@ package msg
 
 import (
 	"net"
+	"strings"
 
 	"github.com/miekg/dns"
 )
@@ -19,6 +20,9 @@ func (s *Service) HostType() (what uint16, normalized net.IP) {
 	ip := net.ParseIP(s.Host)
 
 	switch {
+	case strings.HasPrefix(Domain(s.Key), "_"):
+		return dns.TypeSRV, nil
+
 	case ip == nil:
 		return dns.TypeCNAME, nil
 
