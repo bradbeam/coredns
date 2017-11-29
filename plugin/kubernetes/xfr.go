@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"net"
 	"strings"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
@@ -32,8 +33,23 @@ func (k *Kubernetes) transfer(c chan msg.Service, zone string) {
 	zonePath := msg.Path(zone, "coredns")
 	serviceList := k.APIConn.ServiceList()
 	for _, svc := range serviceList {
-		// Endpoint query or headless service
-		if svc.Spec.ClusterIP == api.ClusterIPNone {
+		switch svc.Spec.Type {
+		case api.ServiceTypeClusterIP, api.ServiceTypeNodePort, api.ServiceTypeLoadBalancer:
+
+			if net.ParseIP(svc.Spec.ClusterIP) != nil {
+				for _, p := range svc.Spec.Ports {
+
+					s := msg.Service{Host: svc.Spec.ClusterIP, Port: int(p.Port), TTL: k.ttl}
+					s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
+
+					c <- s
+
+				}
+
+				//  Skip endpoint discovery if clusterIP is defined
+				continue
+			}
+
 			endpointsList := k.APIConn.EpIndex(svc.Name + "." + svc.Namespace)
 
 			for _, ep := range endpointsList {
@@ -49,32 +65,22 @@ func (k *Kubernetes) transfer(c chan msg.Service, zone string) {
 							s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name, endpointHostname(addr, k.endpointNameMode)}, "/")
 
 							c <- s
+
 						}
 					}
 				}
 			}
-			continue
-		}
 
-		// External service
-		if svc.Spec.Type == api.ServiceTypeExternalName {
+		case api.ServiceTypeExternalName:
+
 			s := msg.Service{Key: strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/"), Host: svc.Spec.ExternalName, TTL: k.ttl}
 			if t, _ := s.HostType(); t == dns.TypeCNAME {
 				s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
 
 				c <- s
 			}
-			continue
 		}
 
-		// ClusterIP service
-		for _, p := range svc.Spec.Ports {
-
-			s := msg.Service{Host: svc.Spec.ClusterIP, Port: int(p.Port), TTL: k.ttl}
-			s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
-
-			c <- s
-		}
 	}
 	return
 }
