@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
@@ -42,5 +43,33 @@ func TestKubernetesXFR(t *testing.T) {
 		t.Logf("%+v\n", w)
 		t.Error("Did not get back a zone response")
 	}
-	t.Logf("%+v\n", w)
+
+	for _, resp := range w.Msg.Answer {
+		if resp.Header().Rrtype == dns.TypeSOA {
+			continue
+		}
+
+		found := false
+		recs := []string{}
+
+		for _, tc := range dnsTestCases {
+			// Skip failures
+			if tc.Rcode != dns.RcodeSuccess {
+				continue
+			}
+			for _, ans := range tc.Answer {
+				if resp.String() == ans.String() {
+					found = true
+					break
+				}
+				recs = append(recs, ans.String())
+			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Got back a RR we shouldnt have %+v\n%+v\n", resp, strings.Join(recs, "\n"))
+		}
+	}
 }

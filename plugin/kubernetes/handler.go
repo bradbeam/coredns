@@ -55,6 +55,14 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		fallthrough
 	case dns.TypeAXFR:
 		records, err = plugin.AXFR(&k, zone, state, plugin.Options{})
+		if k.Fallthrough {
+			fakew := new(fakewriter)
+			_, err := plugin.NextOrFailure(k.Name(), k.Next, ctx, fakew, r)
+			if err != nil {
+				break
+			}
+			records = append(records, fakew.Msg.Answer...)
+		}
 	default:
 		// Do a fake A lookup, so we can distinguish between NODATA and NXDOMAIN
 		_, err = plugin.A(&k, zone, state, nil, plugin.Options{})
