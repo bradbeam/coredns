@@ -19,10 +19,11 @@ func (s *Service) HostType() (what uint16, normalized net.IP) {
 
 	ip := net.ParseIP(s.Host)
 
-	switch {
-	case strings.HasPrefix(Domain(s.Key), "_"):
+	if s.Key != "" && strings.HasPrefix(Domain(s.Key), "_") {
 		return dns.TypeSRV, nil
+	}
 
+	switch {
 	case ip == nil:
 		return dns.TypeCNAME, nil
 
