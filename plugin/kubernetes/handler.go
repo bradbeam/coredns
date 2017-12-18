@@ -1,6 +1,8 @@
 package kubernetes
 
 import (
+	"log"
+
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/request"
@@ -65,8 +67,10 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 			if err != nil {
 				break
 			}
+
+			fakeMsg := fakew.ReadMsg()
 			// Strip out SOA records
-			records = append(records, fakew.Msg.Answer[1:len(fakew.Msg.Answer)-2]...)
+			records = append(records, fakeMsg.Answer[1:len(fakeMsg.Answer)-1]...)
 		}
 
 		records = append(records, records[0]) // add closing SOA to the end
@@ -78,7 +82,7 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 
 		j, l := 0, 0
 
-		// log.Printf("[INFO] Outgoing transfer of %d records of zone %s to %s started", len(records), zone, state.IP())
+		log.Printf("[INFO] Outgoing transfer of %d records of zone %s to %s started", len(records), zone, state.IP())
 		for i, r := range records {
 			l += dns.Len(r)
 			if l > transferLength {
