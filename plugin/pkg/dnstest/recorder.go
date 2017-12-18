@@ -64,6 +64,7 @@ func (r *Recorder) Write(buf []byte) (int, error) {
 	return n, err
 }
 
+// ReadMsg returns the locally buffered dns.Msg
 func (r *Recorder) ReadMsg() *dns.Msg {
 	r.Lock()
 	defer r.Unlock()
