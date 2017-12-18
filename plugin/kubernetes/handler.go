@@ -9,6 +9,8 @@ import (
 	"golang.org/x/net/context"
 )
 
+const transferLength = 1000 // Start a new envelop after message reaches this size in bytes. Intentionally small to test multi envelope parsing.
+
 // ServeDNS implements the plugin.Handler interface.
 func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r}
@@ -55,14 +57,43 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		fallthrough
 	case dns.TypeAXFR:
 		records, err = plugin.AXFR(&k, zone, state, plugin.Options{})
-		if k.Fallthrough {
-			fakew := new(fakewriter)
-			_, err := plugin.NextOrFailure(k.Name(), k.Next, ctx, fakew, r)
-			if err != nil {
-				break
+		// TODO fix so it doesnt panic
+		/*
+			if k.Fallthrough {
+				fakew := new(fakewriter)
+				_, err := plugin.NextOrFailure(k.Name(), k.Next, ctx, fakew, r)
+				if err != nil {
+					break
+				}
+				records = append(records, fakew.Msg.Answer...)
 			}
-			records = append(records, fakew.Msg.Answer...)
+		*/
+		records = append(records, records[0]) // add closing SOA to the end
+
+		ch := make(chan *dns.Envelope)
+		defer close(ch)
+		tr := new(dns.Transfer)
+		go tr.Out(w, r, ch)
+
+		j, l := 0, 0
+
+		// log.Printf("[INFO] Outgoing transfer of %d records of zone %s to %s started", len(records), zone, state.IP())
+		for i, r := range records {
+			l += dns.Len(r)
+			if l > transferLength {
+				ch <- &dns.Envelope{RR: records[j:i]}
+				l = 0
+				j = i
+			}
 		}
+		if j < len(records) {
+			ch <- &dns.Envelope{RR: records[j:]}
+		}
+
+		w.Hijack()
+		// w.Close() // Client closes connection
+		return dns.RcodeSuccess, nil
+
 	default:
 		// Do a fake A lookup, so we can distinguish between NODATA and NXDOMAIN
 		_, err = plugin.A(&k, zone, state, nil, plugin.Options{})
