@@ -57,17 +57,18 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 		fallthrough
 	case dns.TypeAXFR:
 		records, err = plugin.AXFR(&k, zone, state, plugin.Options{})
-		// TODO fix so it doesnt panic
-		/*
-			if k.Fallthrough {
-				fakew := new(fakewriter)
-				_, err := plugin.NextOrFailure(k.Name(), k.Next, ctx, fakew, r)
-				if err != nil {
-					break
-				}
-				records = append(records, fakew.Msg.Answer...)
+		if k.Fallthrough {
+			fakew := new(fakewriter)
+			fakew.RemoteIP = w.RemoteAddr()
+
+			_, err := plugin.NextOrFailure(k.Name(), k.Next, ctx, fakew, r)
+			if err != nil {
+				break
 			}
-		*/
+			// Strip out SOA records
+			records = append(records, fakew.Msg.Answer[1:len(fakew.Msg.Answer)-2]...)
+		}
+
 		records = append(records, records[0]) // add closing SOA to the end
 
 		ch := make(chan *dns.Envelope)
@@ -117,11 +118,6 @@ func (k Kubernetes) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.M
 	m.Extra = append(m.Extra, extra...)
 
 	m = dnsutil.Dedup(m)
-
-	// Need to add in SOA record at end after dedup
-	if state.QType() == dns.TypeAXFR {
-		m.Answer = append(m.Answer, m.Answer[0])
-	}
 
 	state.SizeAndDo(m)
 	m, _ = state.Scrub(m)
