@@ -39,12 +39,12 @@ func TestKubernetesXFR(t *testing.T) {
 		t.Error(err)
 	}
 
-	if w.Msg == nil {
+	if w.ReadMsg() == nil {
 		t.Logf("%+v\n", w)
 		t.Error("Did not get back a zone response")
 	}
 
-	for _, resp := range w.Msg.Answer {
+	for _, resp := range w.ReadMsg().Answer {
 		if resp.Header().Rrtype == dns.TypeSOA {
 			continue
 		}
